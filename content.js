@@ -103,7 +103,8 @@
       }
     }
     rec.score = res.score; rec.label = res.label; rec.projected = res.projected; rec.seen = now;
-    rec.views = t.views;
+    rec.views = t.views; rec.replies = t.replies;
+    rec.reply = res.reply.score; rec.remaining = res.reply.remaining;
 
     // learn the author's normal level from settled posts (>= 60 min old)
     if (ageMin >= 60 && ageMin <= 600 && res.projected && !rec.counted) {
@@ -181,11 +182,12 @@
       const h = ageMin / 60;
       b.textContent = (h >= 24 ? Math.round(h / 24) + 'd' : Math.round(h) + 'h') + ' · ' + res.score;
     } else {
-      b.textContent = icon + res.score;
+      b.textContent = icon + res.score + (res.reply.score > 0 ? ' · 💬' + res.reply.score : '');
     }
     const p = res.parts;
     const lines = [
       `Score ${res.score}/100 (${res.label})`,
+      `Reply value 💬${res.reply.score}/100 · ~${fmt(res.reply.remaining)} views still to come · ${t.replies || 0} replies`,
       `Age ${Math.round(ageMin)} min · ${fmt(res.vpm)} views/min`,
       `Projected ~${fmt(res.projected)} views`,
       `Engagement/view ${(res.er * 100).toFixed(1)}%`,
@@ -197,7 +199,7 @@
   }
 
 
-  // ---- on-page panel: best fresh posts seen so far + dim toggle ----
+  // ---- on-page panel: top posts to reply to right now (reply value), always filled + dim toggle ----
   let panel = null, listEl = null, dimOn = false, collapsed = true;
   try { dimOn = localStorage.getItem('xvr_dim') === '1'; collapsed = localStorage.getItem('xvr_collapsed') !== '0'; } catch (e) { /* storage blocked */ }
 
@@ -230,14 +232,14 @@
     panel.querySelector('[data-a="fold"]').textContent = collapsed ? '+' : '–';
     const cutoff = Date.now() - 3 * 3600 * 1000;
     const rows = Object.entries(tweets)
-      .filter(([, t]) => (t.seen || 0) >= cutoff && Date.now() - t.created <= 4 * 3600 * 1000 && (t.label === 'hot' || t.label === 'rising'))
-      .sort((a, b) => b[1].score - a[1].score)
-      .slice(0, 8);
+      .filter(([, t]) => (t.seen || 0) >= cutoff && Date.now() - t.created <= 4 * 3600 * 1000 && (t.reply || 0) > 0)
+      .sort((a, b) => (b[1].reply || 0) - (a[1].reply || 0))
+      .slice(0, 10);
     panel.querySelector('.xvr-n').textContent = rows.length ? '(' + rows.length + ')' : '';
     listEl.textContent = '';
     if (!rows.length) {
       const d = document.createElement('div'); d.className = 'xvr-empty';
-      d.textContent = 'No hot or rising posts yet. Scroll Following / Latest.';
+      d.textContent = 'Nothing to reply to yet. Scroll the feed or search min_faves:300 -filter:replies on Latest.';
       listEl.appendChild(d); return;
     }
     for (const [id, t] of rows) {
@@ -246,10 +248,10 @@
       const seenAgo = Math.round((Date.now() - (t.seen || Date.now())) / 60000);
       const h = document.createElement('div');
       h.innerHTML = '<span class="xvr-pill"></span> <span class="xvr-who"></span> <span class="xvr-sub"></span>';
-      h.querySelector('.xvr-pill').textContent = (t.label === 'hot' ? '🔥 ' : '↗ ') + t.score;
+      h.querySelector('.xvr-pill').textContent = '💬 ' + t.reply + (t.label === 'hot' ? ' 🔥' : t.label === 'rising' ? ' ↗' : '');
       h.querySelector('.xvr-pill').dataset.label = t.label;
       h.querySelector('.xvr-who').textContent = '@' + t.handle;
-      h.querySelector('.xvr-sub').textContent = `${fmt(t.views)} views · ${age}m old · seen ${seenAgo}m ago`;
+      h.querySelector('.xvr-sub').textContent = `~${fmt(t.remaining)} to come · ${t.replies || 0} repl · ${age}m old · seen ${seenAgo}m ago`;
       const x = document.createElement('div'); x.className = 'xvr-txt'; x.textContent = t.text || '';
       r.appendChild(h); r.appendChild(x);
       r.addEventListener('click', () => goTo(id, t.handle));

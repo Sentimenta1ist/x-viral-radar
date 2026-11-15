@@ -17,6 +17,14 @@ The scoring is a small, transparent model: four signals read from numbers alread
 - Optional calibration helper: star a post to save its score and counters; the popup can later re-check saved posts after 24 h and export a CSV with the before/after numbers.
 - Data is stored only in `chrome.storage.local` in your browser. The extension makes no network requests of its own and never posts, likes or clicks anything on your behalf.
 
+## Reply value (💬)
+
+Next to the virality score, every post gets a reply value 0–100: how many people will still open the thread and could see a reply written now. X shows replies from accounts the viewer does not follow only inside the thread (`OONRetweetReplyFilter` in [xai-org/x-algorithm](https://github.com/xai-org/x-algorithm)), so what counts is the audience still to come, not the size already reached:
+
+`value = (projected final views − views so far) × 1 / (1 + replies / 50) × acceleration (0.5–2)`, mapped 1k → 0, 200k → 100 (log scale), zero after 4 hours.
+
+The on-page panel and the popup always list the top posts by reply value from the last 3 hours (up to 10 / 20), with no threshold, so they are never empty while you scroll. Feed it fresh posts: the Latest tab of a search like `min_faves:300 -filter:replies` works well.
+
 ## How scoring works
 
 Four signals are combined:

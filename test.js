@@ -25,5 +25,17 @@ const vsBig = score({ views: 50000, likes: 500, replies: 20, reposts: 30, bookma
 const vsSmall = score({ views: 50000, likes: 500, replies: 20, reposts: 30, bookmarks: 20, ageMin: 120 }, { authorProjected: [3000, 4000, 5000] });
 assert(vsSmall.score > vsBig.score, 'relative signal should matter');
 
+// reply value: fresh post with audience still coming beats a bigger post that already peaked and is flooded
+const early = score({ views: 20000, likes: 300, replies: 15, reposts: 20, bookmarks: 10, ageMin: 25 });
+const peaked = score({ views: 400000, likes: 9000, replies: 900, reposts: 800, bookmarks: 300, ageMin: 230 });
+assert(early.reply.score > peaked.reply.score, 'reply: early ' + early.reply.score + ' vs peaked ' + peaked.reply.score);
+assert(early.reply.score > 40, 'early reply score ' + early.reply.score);
+// past the reply window -> 0
+assert.strictEqual(score({ views: 400000, likes: 9000, replies: 20, reposts: 800, bookmarks: 300, ageMin: 300 }).reply.score, 0);
+// more replies -> lower
+const quiet = score({ views: 20000, likes: 300, replies: 5, reposts: 20, bookmarks: 10, ageMin: 40 });
+const crowded = score({ views: 20000, likes: 300, replies: 300, reposts: 20, bookmarks: 10, ageMin: 40 });
+assert(quiet.reply.score > crowded.reply.score, 'crowd penalty');
+
 assert(lifetimeFraction(150, 150) > 0.63 && lifetimeFraction(150, 150) < 0.64);
-console.log('ok', { cold: cold.score, hot: hot.score, vsBig: vsBig.score, vsSmall: vsSmall.score });
+console.log('ok', { cold: cold.score, hot: hot.score, vsBig: vsBig.score, vsSmall: vsSmall.score, replyEarly: early.reply.score, replyPeaked: peaked.reply.score, quiet: quiet.reply.score, crowded: crowded.reply.score });

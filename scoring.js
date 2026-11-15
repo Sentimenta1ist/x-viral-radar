@@ -8,6 +8,11 @@
     minViews: 30,
     maxAgeMin: 360,    // older posts are not flagged
     weights: { reply: 3, repost: 2, like: 1, bookmark: 2 },
+    // reply value: how many people will still open this thread and could see a fresh reply
+    replyMaxAgeMin: 240,   // older threads are mostly done: no reply score
+    crowdReplies: 50,      // at this many replies a new reply gets about half the visibility
+    replyMin: 1000,        // remaining views -> 0
+    replyMax: 200000,      // remaining views -> 100
   };
 
   const clamp = (x, lo = 0, hi = 100) => Math.min(hi, Math.max(lo, x));
@@ -28,13 +33,26 @@
     return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
   }
 
+  // Reply value (Nov 2026). X shows replies from accounts you don't follow only inside the thread (OONRetweetReplyFilter
+  // in xai-org/x-algorithm), so a reply is seen by people who open the thread later. Value = views still to come
+  // (projection minus views so far) x share left after the crowd of earlier replies x current acceleration.
+  function replyValue(views, ageMin, replies, projected, accelRatio, cfg) {
+    if (ageMin > cfg.replyMaxAgeMin || !projected) return { score: 0, remaining: 0, crowd: 0 };
+    const remaining = Math.max(projected - views, 0);
+    const crowd = 1 / (1 + (replies || 0) / cfg.crowdReplies);
+    const accel = accelRatio == null ? 1 : Math.min(2, Math.max(0.5, accelRatio));
+    const v = remaining * crowd * accel;
+    const s = v <= cfg.replyMin ? 0 : clamp((Math.log(v / cfg.replyMin) / Math.log(cfg.replyMax / cfg.replyMin)) * 100);
+    return { score: Math.round(s), remaining, crowd };
+  }
+
   // tweet: {views, likes, replies, reposts, bookmarks, ageMin}
   // ctx:   {authorProjected: number[] (past projected finals of this author), prev: {views, ageMin} | null}
   function score(tweet, ctx = {}, userCfg = {}) {
     const cfg = { ...DEFAULTS, ...userCfg, weights: { ...DEFAULTS.weights, ...(userCfg.weights || {}) } };
     const { views, ageMin } = tweet;
     if (!(views >= cfg.minViews) || !(ageMin >= 2)) {
-      return { score: 0, label: 'low-data', parts: {}, projected: null, vpm: views / Math.max(ageMin, 1), confidence: 0 };
+      return { score: 0, label: 'low-data', parts: {}, projected: null, vpm: views / Math.max(ageMin, 1), confidence: 0, reply: { score: 0, remaining: 0, crowd: 0 } };
     }
 
     const projected = projectViews(views, ageMin, cfg);
@@ -61,6 +79,7 @@
       // instantaneous / average rate expected from the decay model at this age
       const expected = (Math.exp(-ageMin / cfg.tau) / cfg.tau) / (lifetimeFraction(ageMin, cfg.tau) / ageMin);
       const ratio = recent / (vpm * expected);
+      parts.accelRatio = ratio;
       parts.acceleration = clamp(50 + 50 * Math.log2(ratio));
       parts.recentVpm = recent;
     }
@@ -75,10 +94,11 @@
 
     let label = total >= cfg.hotScore ? 'hot' : total >= cfg.risingScore ? 'rising' : 'normal';
     if (ageMin > cfg.maxAgeMin) label = 'old';
-    return { score: Math.round(total), label, parts, projected, vpm, er, confidence };
+    const reply = replyValue(views, ageMin, tweet.replies, projected, parts.accelRatio, cfg);
+    return { score: Math.round(total), label, parts, projected, vpm, er, confidence, reply };
   }
 
-  const api = { DEFAULTS, score, projectViews, lifetimeFraction, median };
+  const api = { DEFAULTS, score, replyValue, projectViews, lifetimeFraction, median };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.XVR = api;
 })(typeof self !== 'undefined' ? self : this);

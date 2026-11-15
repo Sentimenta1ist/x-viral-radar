@@ -11,7 +11,7 @@ chrome.storage.local.get(['xvr_tweets', 'xvr_settings'], (d) => {
   const cutoff = Date.now() - 3 * 3600 * 1000;
   const rows = Object.entries(tweets)
     .filter(([, t]) => (t.seen || 0) >= cutoff && t.label && t.label !== 'low-data' && t.label !== 'old')
-    .sort((a, b) => b[1].score - a[1].score)
+    .sort((a, b) => (b[1].reply || 0) - (a[1].reply || 0) || b[1].score - a[1].score)
     .slice(0, 20);
 
   $('count').textContent = `${Object.keys(tweets).length} tracked`;
@@ -23,8 +23,8 @@ chrome.storage.local.get(['xvr_tweets', 'xvr_settings'], (d) => {
     const ageMin = Math.round((t.seen - t.created) / 60000);
     const label = LABELS.has(t.label) ? t.label : 'normal';
     return `<div class="row" data-url="https://x.com/${encodeURIComponent(t.handle)}/status/${id}">
-      <div class="top"><span class="pill ${label}">${Math.round(+t.score) || 0}</span>@${esc(t.handle)}
-        <span class="meta">${fmt(t.views)} views · ~${fmt(t.projected)} proj · ${ageMin} min old</span></div>
+      <div class="top"><span class="pill ${label}">💬${Math.round(+t.reply) || 0}</span>@${esc(t.handle)}
+        <span class="meta">${fmt(t.views)} views · ~${fmt(t.remaining)} to come · ${Math.round(+t.replies) || 0} repl · ${ageMin} min old</span></div>
       <div class="txt">${esc(t.text || '')}</div></div>`;
   }).join('');
   document.querySelectorAll('.row').forEach((r) => r.addEventListener('click', () => chrome.tabs.create({ url: r.dataset.url })));
