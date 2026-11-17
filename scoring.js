@@ -9,8 +9,11 @@
     maxAgeMin: 360,    // older posts are not flagged
     weights: { reply: 3, repost: 2, like: 1, bookmark: 2 },
     // reply value: how many people will still open this thread and could see a fresh reply
-    replyMaxAgeMin: 240,   // older threads are mostly done: no reply score
-    crowdReplies: 50,      // at this many replies a new reply gets about half the visibility
+    // Own data, 249 replies 2026-11-04..16: median views 252 under posts < 1 h old, 177 at 1-3 h, 108 at 3-8 h;
+    // 482 at < 3 replies per 10k post views, 92 at 10+; every reply under a 2000+ reply thread stayed under 30 views.
+    replyMaxAgeMin: 180,   // older threads are mostly done: no reply score
+    crowdPer10k: 5,        // replies per 10k views where a new reply gets about half the visibility
+    crowdMaxReplies: 2000, // past this a new reply is never seen
     replyMin: 1000,        // remaining views -> 0
     replyMax: 200000,      // remaining views -> 100
   };
@@ -39,7 +42,9 @@
   function replyValue(views, ageMin, replies, projected, accelRatio, cfg) {
     if (ageMin > cfg.replyMaxAgeMin || !projected) return { score: 0, remaining: 0, crowd: 0 };
     const remaining = Math.max(projected - views, 0);
-    const crowd = 1 / (1 + (replies || 0) / cfg.crowdReplies);
+    // replies per viewer, not the raw count; views floored at 5000 so a young post's first replies don't count as a crowd
+    const perView = (replies || 0) / Math.max(views || 0, 5000) * 10000;
+    const crowd = (replies || 0) >= cfg.crowdMaxReplies ? 0 : 1 / (1 + perView / cfg.crowdPer10k);
     const accel = accelRatio == null ? 1 : Math.min(2, Math.max(0.5, accelRatio));
     const v = remaining * crowd * accel;
     const s = v <= cfg.replyMin ? 0 : clamp((Math.log(v / cfg.replyMin) / Math.log(cfg.replyMax / cfg.replyMin)) * 100);

@@ -36,6 +36,10 @@ assert.strictEqual(score({ views: 400000, likes: 9000, replies: 20, reposts: 800
 const quiet = score({ views: 20000, likes: 300, replies: 5, reposts: 20, bookmarks: 10, ageMin: 40 });
 const crowded = score({ views: 20000, likes: 300, replies: 300, reposts: 20, bookmarks: 10, ageMin: 40 });
 assert(quiet.reply.score > crowded.reply.score, 'crowd penalty');
+const drowned = score({ views: 5000000, likes: 9000, replies: 2500, reposts: 300, bookmarks: 50, ageMin: 60 });
+assert(drowned.reply.score === 0, '2000+ replies: no reply score');
+const late = score({ views: 300000, likes: 900, replies: 20, reposts: 20, bookmarks: 10, ageMin: 200 });
+assert(late.reply.score === 0, 'older than 3 h: no reply score');
 
 assert(lifetimeFraction(150, 150) > 0.63 && lifetimeFraction(150, 150) < 0.64);
 console.log('ok', { cold: cold.score, hot: hot.score, vsBig: vsBig.score, vsSmall: vsSmall.score, replyEarly: early.reply.score, replyPeaked: peaked.reply.score, quiet: quiet.reply.score, crowded: crowded.reply.score });
