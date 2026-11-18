@@ -52,6 +52,11 @@ chrome.runtime.onMessage.addListener((msg, sender, send) => {
     });
     return true;
   }
+  if (msg.type === 'scout') {   // fresh feed posts → local x-scout reply queue; x-scout off = dropped
+    fetch('http://localhost:8765/api/feed', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ posts: msg.posts }) })
+      .then((r) => send({ ok: r.ok })).catch(() => send({ ok: false }));
+    return true;
+  }
   if (msg.type === 'recheck') {
     runRecheck().then(send);
     return true;

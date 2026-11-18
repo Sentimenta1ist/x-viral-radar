@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "X Viral Radar",
-  "version": "0.2.0",
-  "description": "Passively scores posts on x.com by early virality: views per minute, engagement per view, growth vs the author's normal. Reads only the page you already see.",
+  "version": "0.3.0",
+  "description": "Passively scores posts on x.com by early virality and sends fresh ones to the local x-scout app for its reply queue. Reads only the page you already see.",
   "permissions": [
     "storage",
     "unlimitedStorage"
@@ -29,5 +29,8 @@
   ],
   "background": {
     "service_worker": "background.js"
-  }
+  },
+  "host_permissions": [
+    "http://localhost:8765/*"
+  ]
 }

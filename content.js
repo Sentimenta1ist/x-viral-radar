@@ -1,5 +1,5 @@
 // Passive reader: scans tweets already rendered in the user's own feed, scores them, shows a badge.
-// No network calls, no clicks, no posting.
+// No calls to X, no clicks, no posting. Fresh posts go to the local x-scout app (localhost:8765) for its reply queue.
 (() => {
   const SCAN_MS = 20000;
   const SNAP_MIN_GAP_MS = 60000;
@@ -70,7 +70,10 @@
     const metrics = readMetrics(article);
     if (metrics.views == null) return null;
     const textEl = article.querySelector('[data-testid="tweetText"]');
-    return { id: m[2], handle: m[1].toLowerCase(), created, text: textEl ? textEl.textContent.slice(0, 140) : '', ...metrics };
+    const full = textEl ? textEl.innerText.slice(0, 1200) : '';
+    const nameEl = article.querySelector('[data-testid="User-Name"] span');
+    const isReply = /^(Replying to|В ответ)/m.test(article.innerText.slice(0, 300));
+    return { id: m[2], handle: m[1].toLowerCase(), created, text: full.slice(0, 140), full, name: nameEl ? nameEl.textContent : '', isReply, ...metrics };
   }
 
   function process(article) {
@@ -115,7 +118,25 @@
     }
 
     reportIfSaved(t, ageMin);
+    queueForScout(t, ageMin);
     paint(article, res, t, ageMin);
+  }
+
+  // x-scout (local app on :8765) builds the reply queue from what you scroll past: fresh posts go there in small batches
+  // through background.js. Only localhost, nothing goes to X; if x-scout is off the batch is dropped.
+  const outbox = {};
+  const sentAt = {};
+  function queueForScout(t, ageMin) {
+    if (ageMin > 180 || t.isReply || !t.full) return;
+    if (sentAt[t.id] && Date.now() - sentAt[t.id] < 10 * 60000) return;   // counters refresh every 10 min at most
+    outbox[t.id] = { id: t.id, handle: t.handle, name: t.name, created: t.created, text: t.full, views: t.views,
+                     likes: t.likes, replies: t.replies, reposts: t.reposts, bookmarks: t.bookmarks };
+  }
+  function sendToScout() {
+    const posts = Object.values(outbox);
+    if (!posts.length || !alive()) return;
+    for (const p of posts) { sentAt[p.id] = Date.now(); delete outbox[p.id]; }
+    try { chrome.runtime.sendMessage({ type: 'scout', posts }); } catch (e) { /* extension reloaded */ }
   }
 
   function reportIfSaved(t, ageMin) {
@@ -308,6 +329,7 @@
     observer.observe(document.body, { childList: true, subtree: true });
     intervals.push(setInterval(scan, SCAN_MS));   // re-read counters of tweets that stay on screen
     intervals.push(setInterval(flush, FLUSH_MS));
+    intervals.push(setInterval(sendToScout, 10000));
   });
 
   chrome.storage.onChanged.addListener((ch) => {
